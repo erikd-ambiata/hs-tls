@@ -41,8 +41,8 @@ readExact ctx sz = do
     if B.length hdrbs == sz
         then return $Right hdrbs
         else if B.null hdrbs
-            then throwCore Error_EOF
-            else return . Left $ Error_Packet ("partial packet: expecting " ++ show sz ++ " bytes, got: " ++ (show $B.length hdrbs))
+            then throwIO Error_EOF
+            else throwIO $ Error_Packet ("partial packet: expecting " ++ show sz ++ " bytes, got: " ++ (show $B.length hdrbs))
 
 
 -- | recvRecord receive a full TLS record (header + data), from the other side.
