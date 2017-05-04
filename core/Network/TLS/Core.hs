@@ -87,9 +87,11 @@ recvData ctx = liftIO $ do
   where onError Error_EOF = -- Not really an error.
             return B.empty
 
-        onError err@(Error_Protocol (reason,fatal,desc)) =
+        onError err@(Error_Protocol (reason,fatal,desc)) = do
+            putStrLn $ "onError (protocol): " ++ show err
             terminate err (if fatal then AlertLevel_Fatal else AlertLevel_Warning) desc reason
-        onError err =
+        onError err = do
+            putStrLn $ "onError: " ++ show err
             terminate err AlertLevel_Fatal InternalError (show err)
 
         process (Handshake [ch@(ClientHello {})]) =
@@ -110,12 +112,17 @@ recvData ctx = liftIO $ do
 
         terminate :: TLSError -> AlertLevel -> AlertDescription -> String -> IO a
         terminate err level desc reason = do
+            putStrLn "terminate 1"
             session <- usingState_ ctx getSession
+            putStrLn "terminate 1"
             case session of
                 Session Nothing    -> return ()
                 Session (Just sid) -> sessionInvalidate (sharedSessionManager $ ctxShared ctx) sid
+            putStrLn "terminate 3"
             catchException (sendPacket ctx $ Alert [(level, desc)]) (\_ -> return ())
+            putStrLn "terminate 4"
             setEOF ctx
+            putStrLn "terminate 5"
             E.throwIO (Terminated False reason err)
 
         -- the other side could have close the connection already, so wrap
