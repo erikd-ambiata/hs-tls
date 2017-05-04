@@ -94,10 +94,10 @@ recvData ctx = liftIO $ do
 
         onError err@(Error_Protocol (reason,fatal,desc)) = do
             putStrLn $ "onError (protocol): " ++ show err
-            terminate err (if fatal then AlertLevel_Fatal else AlertLevel_Warning) desc reason
+            terminate ctx err (if fatal then AlertLevel_Fatal else AlertLevel_Warning) desc reason
         onError err = do
             putStrLn $ "onError: " ++ show err
-            terminate err AlertLevel_Fatal InternalError (show err)
+            terminate ctx err AlertLevel_Fatal InternalError (show err)
 
         process (Handshake [ch@(ClientHello {})]) =
             withRWLock ctx ((ctxDoHandshakeWith ctx) ctx ch) >> recvData ctx
@@ -113,26 +113,23 @@ recvData ctx = liftIO $ do
         process (AppData "") = recvData ctx
         process (AppData x)  = return x
         process p            = let reason = "unexpected message " ++ show p in
-                               terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-
-        terminate :: TLSError -> AlertLevel -> AlertDescription -> String -> IO a
-        terminate err level desc reason = do
-            putStrLn "terminate 1"
-            session <- usingState_ ctx getSession
-            putStrLn "terminate 1"
-            case session of
-                Session Nothing    -> return ()
-                Session (Just sid) -> sessionInvalidate (sharedSessionManager $ ctxShared ctx) sid
-            putStrLn "terminate 3"
-            catchException (sendPacket ctx $ Alert [(level, desc)]) (\_ -> return ())
-            putStrLn "terminate 4"
-            setEOF ctx
-            putStrLn "terminate 5"
-            E.throwIO (Terminated False reason err)
+                               terminate ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
 
         -- the other side could have close the connection already, so wrap
         -- this in a try and ignore all exceptions
         tryBye = catchException (bye ctx) (\_ -> return ())
+
+terminate :: Context -> TLSError -> AlertLevel -> AlertDescription -> String -> IO a
+terminate ctx err level desc reason = do
+    session <- usingState_ ctx getSession
+    case session of
+        Session Nothing    -> return ()
+        Session (Just sid) -> sessionInvalidate (sharedSessionManager $ ctxShared ctx) sid
+    catchException (sendPacket ctx $ Alert [(level, desc)]) (\_ -> return ())
+    setEOF ctx
+    putStrLn "terminate throwIO"
+    E.throwIO (Terminated False reason err)
+
 
 {-# DEPRECATED recvData' "use recvData that returns strict bytestring" #-}
 -- | same as recvData but returns a lazy bytestring.
