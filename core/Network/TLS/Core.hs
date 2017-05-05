@@ -94,6 +94,7 @@ recvData ctx = liftIO $ do
         onError err@(Error_Protocol (reason,fatal,desc)) = do
             putStrLn $ "onError (protocol): " ++ show err
             terminate err (if fatal then AlertLevel_Fatal else AlertLevel_Warning) desc reason
+
         onError err = do
             putStrLn $ "onError: " ++ show err
             terminate err AlertLevel_Fatal InternalError (show err)
